@@ -17,8 +17,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <Python.h>
+#include <structmember.h>
 #include <cassert>
 #include "dbopl.h"
+
+#if PY_MAJOR_VERSION >= 3
+#define IS_PY3K
+#endif
 
 // Size of each sample in bytes (2 == 16-bit)
 #define SAMPLE_SIZE 2
@@ -134,10 +139,17 @@ void opl_dealloc(PyObject *self)
 	PyObject_Del(self);
 	return;
 }
-
+#ifndef IS_PY3K
 PyObject *opl_getattr(PyObject *self, char *attrname)
+#else
+PyObject *opl_getattro(PyObject *self,  PyObject *attr)
+#endif
 {
+#ifndef IS_PY3K
 	return Py_FindMethod(opl_methods, self, attrname);
+#else
+		return PyObject_GenericGetAttr(self, attr);
+#endif
 }
 
 int opl_setattr(PyObject *self, char *attrname, PyObject *value)
@@ -148,19 +160,31 @@ int opl_setattr(PyObject *self, char *attrname, PyObject *value)
 
 PyObject *opl_repr(PyObject *self)
 {
+#ifndef IS_PY3K
 	return PyString_FromString("<OPL>");
+#else
+	return PyUnicode_FromString("<OPL>");
+#endif
 }
 
 static PyTypeObject PyOPLType = {
+#ifndef IS_PY3K
 	PyObject_HEAD_INIT(&PyType_Type)
 	0,              // ob_size
+#else
+	PyVarObject_HEAD_INIT(&PyType_Type, 0)
+#endif
 	"pyopl",        // tp_name
 	sizeof(PyOPL),  // tp_basicsize
 	0,              // tp_itemsize
 
 	opl_dealloc,    // tp_dealloc
 	0,              // tp_print
+#ifndef IS_PY3K
 	opl_getattr,    // tp_getattr
+#else
+	0,    // tp_getattr
+#endif
 	opl_setattr,    // tp_setattr
 	0,              // tp_compare
 	opl_repr,       // tp_repr
@@ -170,10 +194,22 @@ static PyTypeObject PyOPLType = {
 	0,              // tp_hash
 	0,              // tp_call
 	0,              // tp_str
+#ifndef IS_PY3K
 	0,              // tp_getattro
+#else
+	opl_getattro,              // tp_getattro
+#endif
 	0,              // tp_setattro
 	0,              // tp_as_buffer
 	Py_TPFLAGS_DEFAULT, // tp_flags
+	0,				/*tp_doc*/
+	0,				/*tp_traverse*/
+	0,				/*tp_clear*/
+	0,				/*tp_richcompare*/
+	0,				/*tp_weaklistoffset*/
+	0,				/*tp_iter*/
+	0,				/*tp_iternext*/
+	opl_methods,		/*tp_methods*/
 };
 
 PyObject *opl_new(PyObject *self, PyObject *args, PyObject *keywds)
@@ -206,9 +242,32 @@ static PyMethodDef methods[] = {
 	{"opl", (PyCFunction)opl_new, METH_VARARGS | METH_KEYWORDS, "Create a new OPL emulator instance."},
 	{NULL, NULL, 0, NULL}
 };
-
+#ifndef IS_PY3K
 PyMODINIT_FUNC
 initpyopl(void)
 {
     (void) Py_InitModule("pyopl", methods);
 }
+#else
+
+static PyModuleDef pyopl_module = {
+	PyModuleDef_HEAD_INIT,
+	"pyopl",
+	"",
+	-1,
+	methods,
+};
+
+PyMODINIT_FUNC PyInit_pyopl(void)
+{
+	PyObject *m;
+  /**
+	if (PyType_Ready(&jfile_type) < 0 ||
+			PyType_Ready(&jtrans_type) < 0)
+		return NULL;
+	**/
+	m = PyModule_Create(&pyopl_module);
+
+	return m;
+}
+#endif
